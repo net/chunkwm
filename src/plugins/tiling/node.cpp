@@ -9,6 +9,7 @@
 #include "../../common/accessibility/window.h"
 #include "../../common/accessibility/element.h"
 #include "../../common/accessibility/display.h"
+#include "../../common/accessibility/notify.h"
 
 #include <queue>
 #include <map>
@@ -149,8 +150,14 @@ CenterWindowInRegion(macos_window *Window, region Region)
         Region.Y += OffsetY;
         Region.Height -= OffsetY;
 
-        AXLibSetWindowPosition(Window->Ref, Region.X, Region.Y);
-        AXLibSetWindowSize(Window->Ref, Region.Width, Region.Height);
+        float NewX      = Region.X;
+        float NewY      = Region.Y;
+        float NewWidth  = Region.Width;
+        float NewHeight = Region.Height;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
 }
 
@@ -160,8 +167,14 @@ void ResizeWindowToRegionSize(node *Node, bool Center)
     macos_window *Window = GetWindowByID(Node->WindowId);
     ASSERT(Window);
 
-    bool WindowMoved  = AXLibSetWindowPosition(Window->Ref, Node->Region.X, Node->Region.Y);
-    bool WindowResized = AXLibSetWindowSize(Window->Ref, Node->Region.Width, Node->Region.Height);
+    float NewX      = Node->Region.X;
+    float NewY      = Node->Region.Y;
+    float NewWidth  = Node->Region.Width;
+    float NewHeight = Node->Region.Height;
+
+    bool WindowMoved  = AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+    bool WindowResized = AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+    notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
 
     if(Center)
     {
@@ -184,8 +197,14 @@ void ResizeWindowToExternalRegionSize(node *Node, region Region, bool Center)
     macos_window *Window = GetWindowByID(Node->WindowId);
     ASSERT(Window);
 
-    bool WindowMoved  = AXLibSetWindowPosition(Window->Ref, Region.X, Region.Y);
-    bool WindowResized = AXLibSetWindowSize(Window->Ref, Region.Width, Region.Height);
+    float NewX      = Region.X;
+    float NewY      = Region.Y;
+    float NewWidth  = Region.Width;
+    float NewHeight = Region.Height;
+
+    bool WindowMoved  = AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+    bool WindowResized = AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+    notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
 
     if(Center)
     {

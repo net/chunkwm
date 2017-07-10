@@ -237,7 +237,7 @@ bool IsWindowValid(macos_window *Window)
     else
     {
         Result = ((AXLibIsWindowStandard(Window)) &&
-                  (AXLibHasFlags(Window, Window_Movable)) &&
+                  // (AXLibHasFlags(Window, Window_Movable)) &&
                   (AXLibHasFlags(Window, Window_Resizable)));
     }
     return Result;

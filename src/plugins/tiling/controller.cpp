@@ -9,6 +9,7 @@
 #include "../../common/ipc/daemon.h"
 #include "../../common/misc/assert.h"
 #include "../../common/misc/debug.h"
+#include "../../common/accessibility/notify.h"
 
 #include "region.h"
 #include "node.h"
@@ -638,13 +639,14 @@ CenterWindow(macos_window *Window)
 
     CGRect DisplayFrame = AXLibGetDisplayBounds(DisplayRef);
 
-    AXLibSetWindowPosition(Window->Ref,
-                           DisplayFrame.origin.x + DisplayFrame.size.width / 4,
-                           DisplayFrame.origin.y + DisplayFrame.size.height / 4);
+    float NewX      = DisplayFrame.origin.x + DisplayFrame.size.width / 4;
+    float NewY      = DisplayFrame.origin.y + DisplayFrame.size.height / 4;
+    float NewWidth  = DisplayFrame.size.width / 2;
+    float NewHeight = DisplayFrame.size.height / 2;
 
-    AXLibSetWindowSize(Window->Ref,
-                       DisplayFrame.size.width / 2,
-                       DisplayFrame.size.height / 2);
+    AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+    AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+    notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
 
     CFRelease(DisplayRef);
 }
@@ -1478,6 +1480,11 @@ void SendWindowToDesktop(char *Op)
     macos_space *Space, *DestinationMonitorActiveSpace;
     CFStringRef SourceMonitorRef, DestinationMonitorRef;
 
+    float NewX;
+    float NewY;
+    float NewWidth;
+    float NewHeight;
+
     Window = GetFocusedWindow();
     if(!Window)
     {
@@ -1566,8 +1573,15 @@ void SendWindowToDesktop(char *Op)
     ASSERT(DestinationMonitorRef);
 
     NormalizedWindow = NormalizeWindowRect(Window->Ref, SourceMonitorRef, DestinationMonitorRef);
-    AXLibSetWindowPosition(Window->Ref, NormalizedWindow.origin.x, NormalizedWindow.origin.y);
-    AXLibSetWindowSize(Window->Ref, NormalizedWindow.size.width, NormalizedWindow.size.height);
+
+    NewX      = NormalizedWindow.origin.x;
+    NewY      = NormalizedWindow.origin.y;
+    NewWidth  = NormalizedWindow.size.width;
+    NewHeight = NormalizedWindow.size.height;
+
+    AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+    AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+    notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
 
     // NOTE(koekeishiya): We need to update our cached window dimensions, as they are
     // used when we attempt to tile the window on the new monitor. If we don't update
@@ -1609,6 +1623,11 @@ void SendWindowToMonitor(char *Op)
     macos_space *Space, *DestinationSpace;
     unsigned SourceMonitor, DestinationMonitor;
     CFStringRef SourceMonitorRef, DestinationMonitorRef;
+
+    float NewX;
+    float NewY;
+    float NewWidth;
+    float NewHeight;
 
     Window = GetFocusedWindow();
     if(!Window)
@@ -1704,8 +1723,15 @@ void SendWindowToMonitor(char *Op)
 
     /* NOTE(koekeishiya): We need to normalize the window x and y position, or it will be out of bounds. */
     NormalizedWindow = NormalizeWindowRect(Window->Ref, SourceMonitorRef, DestinationMonitorRef);
-    AXLibSetWindowPosition(Window->Ref, NormalizedWindow.origin.x, NormalizedWindow.origin.y);
-    AXLibSetWindowSize(Window->Ref, NormalizedWindow.size.width, NormalizedWindow.size.height);
+
+    NewX      = NormalizedWindow.origin.x;
+    NewY      = NormalizedWindow.origin.y;
+    NewWidth  = NormalizedWindow.size.width;
+    NewHeight = NormalizedWindow.size.height;
+
+    AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+    AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+    notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
 
     // NOTE(koekeishiya): We need to update our cached window dimensions, as they are
     // used when we attempt to tile the window on the new monitor. If we don't update
@@ -1817,6 +1843,11 @@ void WarpFloatingWindow(char *Op)
     CFStringRef DisplayRef;
     virtual_space *VirtualSpace;
 
+    float NewX;
+    float NewY;
+    float NewWidth;
+    float NewHeight;
+
     Window = GetFocusedWindow();
     if(!Window)
     {
@@ -1842,38 +1873,80 @@ void WarpFloatingWindow(char *Op)
 
     if(StringEquals(Op, "fullscreen"))
     {
-        AXLibSetWindowPosition(Window->Ref, Region.X, Region.Y);
-        AXLibSetWindowSize(Window->Ref, Region.Width, Region.Height);
+        NewX      = Region.X;
+        NewY      = Region.Y;
+        NewWidth  = Region.Width;
+        NewHeight = Region.Height;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
     else if(StringEquals(Op, "left"))
     {
-        AXLibSetWindowPosition(Window->Ref, Region.X, Region.Y);
-        AXLibSetWindowSize(Window->Ref, Region.Width / 2, Region.Height);
+        NewX      = Region.X;
+        NewY      = Region.Y;
+        NewWidth  = Region.Width / 2;
+        NewHeight = Region.Height;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
     else if(StringEquals(Op, "right"))
     {
-        AXLibSetWindowPosition(Window->Ref, Region.X + Region.Width / 2, Region.Y);
-        AXLibSetWindowSize(Window->Ref, Region.Width / 2, Region.Height);
+        NewX      = Region.X + Region.Width / 2;
+        NewY      = Region.Y;
+        NewWidth  = Region.Width / 2;
+        NewHeight = Region.Height;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
     else if(StringEquals(Op, "top-left"))
     {
-        AXLibSetWindowPosition(Window->Ref, Region.X, Region.Y);
-        AXLibSetWindowSize(Window->Ref, Region.Width / 2, Region.Height / 2);
+        NewX      = Region.X;
+        NewY      = Region.Y;
+        NewWidth  = Region.Width / 2;
+        NewHeight = Region.Height / 2;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
     else if(StringEquals(Op, "top-right"))
     {
-        AXLibSetWindowPosition(Window->Ref, Region.X + Region.Width / 2, Region.Y);
-        AXLibSetWindowSize(Window->Ref, Region.Width / 2, Region.Height / 2);
+        NewX      = Region.X + Region.Width / 2;
+        NewY      = Region.Y;
+        NewWidth  = Region.Width / 2;
+        NewHeight = Region.Height / 2;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
     else if(StringEquals(Op, "bottom-left"))
     {
-        AXLibSetWindowPosition(Window->Ref, Region.X, Region.Y + Region.Height / 2);
-        AXLibSetWindowSize(Window->Ref, Region.Width / 2, Region.Height / 2);
+        NewX      = Region.X;
+        NewY      = Region.Y + Region.Height / 2;
+        NewWidth  = Region.Width / 2;
+        NewHeight = Region.Height / 2;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
     else if(StringEquals(Op, "bottom-right"))
     {
-        AXLibSetWindowPosition(Window->Ref, Region.X + Region.Width / 2, Region.Y + Region.Height / 2);
-        AXLibSetWindowSize(Window->Ref, Region.Width / 2, Region.Height / 2);
+        NewX      = Region.X + Region.Width / 2;
+        NewY      = Region.Y + Region.Height / 2;
+        NewWidth  = Region.Width / 2;
+        NewHeight = Region.Height / 2;
+
+        AXLibSetWindowPosition(Window->Ref, NewX, NewY);
+        AXLibSetWindowSize(Window->Ref, NewWidth, NewHeight);
+        notifyChangeWindowRect(Window->Id, NewX, NewY, NewWidth, NewHeight);
     }
 
 space_free:
