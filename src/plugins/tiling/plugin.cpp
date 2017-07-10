@@ -57,7 +57,7 @@ extern "C" CGError CGSGetOnScreenWindowCount(const CGSConnectionID CID, CGSConne
 extern "C" CGError CGSGetOnScreenWindowList(const CGSConnectionID CID, CGSConnectionID TID, int Count, int *List, int *OutCount);
 
 internal const char *PluginName = "Tiling";
-internal const char *PluginVersion = "0.2.6";
+internal const char *PluginVersion = "0.2.7";
 
 internal macos_application_map Applications;
 
@@ -105,11 +105,11 @@ out:
 }
 
 // NOTE(koekeishiya): Caller is responsible for making sure that the window is not a dupe.
-internal void
+internal uint32_t
 AddWindowToCollection(macos_window *Window)
 {
     Windows[Window->Id] = Window;
-    ApplyRulesForWindow(Window);
+    return ApplyRulesForWindow(Window);
 }
 
 internal macos_window *
@@ -1073,7 +1073,9 @@ ApplicationLaunchedHandler(void *Data)
             }
             else
             {
-                AddWindowToCollection(Window);
+                uint32_t Result = AddWindowToCollection(Window);
+                if(RuleChangedDesktop(Result)) continue;
+                if(RuleTiledWindow(Result))    continue;
                 TileWindow(Window);
             }
         }
@@ -1143,17 +1145,39 @@ WindowFocusedHandler(uint32_t WindowId)
     macos_window *Window = GetWindowByID(WindowId);
     if(Window && IsWindowFocusable(Window))
     {
-        BroadcastFocusedWindowFloating(Window);
+        macos_space *Space;
+        bool Success = AXLibActiveSpace(&Space);
+        ASSERT(Success);
 
-        if(!AXLibHasFlags(Window, Window_Float))
+        if(AXLibSpaceHasWindow(Space->Id, WindowId))
         {
-            UpdateCVar(CVAR_BSP_INSERTION_POINT, Window->Id);
-        }
+            BroadcastFocusedWindowFloating(Window);
 
-        if(CVarIntegerValue(CVAR_MOUSE_FOLLOWS_FOCUS))
-        {
-            CenterMouseInWindow(Window);
+            if(!AXLibHasFlags(Window, Window_Float))
+            {
+                UpdateCVar(CVAR_BSP_INSERTION_POINT, Window->Id);
+            }
+
+            if(CVarIntegerValue(CVAR_MOUSE_FOLLOWS_FOCUS))
+            {
+                CenterMouseInWindow(Window);
+            }
         }
+        else
+        {
+            std::vector<uint32_t> WindowIds = GetAllVisibleWindowsForSpace(Space);
+            for(int Index = 0;
+                Index < WindowIds.size();
+                ++Index)
+            {
+                if(WindowIds[Index] == Window->Id) continue;
+                macos_window *Window = GetWindowByID(WindowIds[Index]);
+                AXLibSetFocusedWindow(Window->Ref);
+                AXLibSetFocusedApplication(Window->Owner->PSN);
+                break;
+            }
+        }
+        AXLibDestroySpace(Space);
     }
 }
 
@@ -1174,10 +1198,10 @@ internal void
 WindowCreatedHandler(void *Data)
 {
     macos_window *Window = (macos_window *) Data;
-
     macos_window *Copy = AXLibCopyWindow(Window);
-    AddWindowToCollection(Copy);
-
+    uint32_t Result = AddWindowToCollection(Copy);
+    if(RuleChangedDesktop(Result)) return;
+    if(RuleTiledWindow(Result))    return;
     TileWindow(Copy);
 }
 

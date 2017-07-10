@@ -113,7 +113,16 @@ WindowFocusedHandler(void *Data)
        ((Window->Owner == Application) ||
        (Application == NULL)))
     {
-        UpdateWindow(Window->Ref);
+        macos_space *Space;
+        bool Success = AXLibActiveSpace(&Space);
+        ASSERT(Success);
+
+        if(AXLibSpaceHasWindow(Space->Id, Window->Id))
+        {
+            UpdateWindow(Window->Ref);
+        }
+
+        AXLibDestroySpace(Space);
     }
 }
 
@@ -329,4 +338,4 @@ chunkwm_plugin_export Subscriptions[] =
 CHUNKWM_PLUGIN_SUBSCRIBE(Subscriptions)
 
 // NOTE(koekeishiya): Generate plugin
-CHUNKWM_PLUGIN("Border", "0.2.3")
+CHUNKWM_PLUGIN("Border", "0.2.4")

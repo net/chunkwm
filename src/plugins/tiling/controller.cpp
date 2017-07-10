@@ -240,39 +240,43 @@ FindWindowUndirected(macos_space *Space, virtual_space *VirtualSpace,
     if(StringEquals(Direction, "prev"))
     {
         node *WindowNode = GetNodeWithId(VirtualSpace->Tree, Window->Id, VirtualSpace->Mode);
-        ASSERT(WindowNode);
-        node *PrevNode = GetPrevLeafNode(WindowNode);
-        if(PrevNode)
+        if(WindowNode)
         {
-            *ClosestWindow = GetWindowByID(PrevNode->WindowId);
-            ASSERT(*ClosestWindow);
-            Result = true;
-        }
-        else if(WrapMonitor)
-        {
-            PrevNode = GetLastLeafNode(VirtualSpace->Tree);
-            *ClosestWindow = GetWindowByID(PrevNode->WindowId);
-            ASSERT(*ClosestWindow);
-            Result = true;
+            node *PrevNode = GetPrevLeafNode(WindowNode);
+            if(PrevNode)
+            {
+                *ClosestWindow = GetWindowByID(PrevNode->WindowId);
+                ASSERT(*ClosestWindow);
+                Result = true;
+            }
+            else if(WrapMonitor)
+            {
+                PrevNode = GetLastLeafNode(VirtualSpace->Tree);
+                *ClosestWindow = GetWindowByID(PrevNode->WindowId);
+                ASSERT(*ClosestWindow);
+                Result = true;
+            }
         }
     }
     else if(StringEquals(Direction, "next"))
     {
         node *WindowNode = GetNodeWithId(VirtualSpace->Tree, Window->Id, VirtualSpace->Mode);
-        ASSERT(WindowNode);
-        node *NextNode = GetNextLeafNode(WindowNode);
-        if(NextNode)
+        if(WindowNode)
         {
-            *ClosestWindow = GetWindowByID(NextNode->WindowId);
-            ASSERT(*ClosestWindow);
-            Result = true;
-        }
-        else if(WrapMonitor)
-        {
-            NextNode = GetFirstLeafNode(VirtualSpace->Tree);
-            *ClosestWindow = GetWindowByID(NextNode->WindowId);
-            ASSERT(*ClosestWindow);
-            Result = true;
+            node *NextNode = GetNextLeafNode(WindowNode);
+            if(NextNode)
+            {
+                *ClosestWindow = GetWindowByID(NextNode->WindowId);
+                ASSERT(*ClosestWindow);
+                Result = true;
+            }
+            else if(WrapMonitor)
+            {
+                NextNode = GetFirstLeafNode(VirtualSpace->Tree);
+                *ClosestWindow = GetWindowByID(NextNode->WindowId);
+                ASSERT(*ClosestWindow);
+                Result = true;
+            }
         }
     }
     return Result;
@@ -1468,13 +1472,13 @@ NormalizeWindowRect(AXUIElementRef WindowRef, CFStringRef SourceMonitor, CFStrin
     return Result;
 }
 
-void SendWindowToDesktop(char *Op)
+bool SendWindowToDesktop(macos_window *Window, char *Op)
 {
-    macos_window *Window;
+    bool Success = false, ValidWindow;
     CGRect NormalizedWindow;
-    bool Success, ValidWindow;
     CGSSpaceID DestinationSpaceId;
     std::vector<uint32_t> WindowIds;
+    macos_space **SpacesForWindow, **List;
     unsigned SourceMonitor, DestinationMonitor;
     unsigned SourceDesktopId, DestinationDesktopId;
     macos_space *Space, *DestinationMonitorActiveSpace;
@@ -1485,14 +1489,11 @@ void SendWindowToDesktop(char *Op)
     float NewWidth;
     float NewHeight;
 
-    Window = GetFocusedWindow();
-    if(!Window)
-    {
-        goto out;
-    }
-
-    Success = AXLibActiveSpace(&Space);
-    ASSERT(Success);
+    SpacesForWindow = List = AXLibSpacesForWindow(Window->Id);
+    Space = *List++;
+    ASSERT(Space);
+    ASSERT(!(*List));
+    free(SpacesForWindow);
 
     if(Space->Type != kCGSSpaceUser)
     {
@@ -1513,6 +1514,7 @@ void SendWindowToDesktop(char *Op)
     else if(sscanf(Op, "%d", &DestinationDesktopId) != 1)
     {
         fprintf(stderr, "invalid destination desktop specified '%s'!\n", Op);
+        Success = false;
         goto space_free;
     }
 
@@ -1521,6 +1523,7 @@ void SendWindowToDesktop(char *Op)
         fprintf(stderr,
                 "invalid destination desktop specified, source desktop and destination '%d' are the same!\n",
                 DestinationDesktopId);
+        Success = false;
         goto space_free;
     }
 
@@ -1552,11 +1555,15 @@ void SendWindowToDesktop(char *Op)
     // priority as reported by MacOS. If there are no windows left on the source space,
     // we still experience desync. Not exactly sure what can be done about that.
     WindowIds = GetAllVisibleWindowsForSpace(Space);
-    if(!WindowIds.empty())
+    for(int Index = 0;
+        Index < WindowIds.size();
+        ++Index)
     {
-        macos_window *Window = GetWindowByID(WindowIds[0]);
+        if(WindowIds[Index] == Window->Id) continue;
+        macos_window *Window = GetWindowByID(WindowIds[Index]);
         AXLibSetFocusedWindow(Window->Ref);
         AXLibSetFocusedApplication(Window->Owner->PSN);
+        break;
     }
 
     if(DestinationMonitor == SourceMonitor)
@@ -1611,7 +1618,17 @@ monitor_free:
 
 space_free:
     AXLibDestroySpace(Space);
-out:;
+
+    return Success;
+}
+
+void SendWindowToDesktop(char *Op)
+{
+    macos_window *Window = GetFocusedWindow();
+    if(Window)
+    {
+        SendWindowToDesktop(Window, Op);
+    }
 }
 
 void SendWindowToMonitor(char *Op)
@@ -1711,11 +1728,15 @@ void SendWindowToMonitor(char *Op)
     // priority as reported by MacOS. If there are no windows left on the source monitor,
     // we still experience desync. Not exactly sure what can be done about that.
     WindowIds = GetAllVisibleWindowsForSpace(Space);
-    if(!WindowIds.empty())
+    for(int Index = 0;
+        Index < WindowIds.size();
+        ++Index)
     {
-        macos_window *Window = GetWindowByID(WindowIds[0]);
+        if(WindowIds[Index] == Window->Id) continue;
+        macos_window *Window = GetWindowByID(WindowIds[Index]);
         AXLibSetFocusedWindow(Window->Ref);
         AXLibSetFocusedApplication(Window->Owner->PSN);
+        break;
     }
 
     SourceMonitorRef = AXLibGetDisplayIdentifierFromSpace(Space->Id);
